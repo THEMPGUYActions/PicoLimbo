@@ -28,45 +28,43 @@ pub enum MiniMessageError {
     },
 }
 
-fn is_hex_color(tag: &str) -> bool {
-    let Some(hex) = tag.strip_prefix('#') else {
-        return false;
-    };
+fn color_from_tag(tag: &str) -> Option<String> {
+    let color = tag
+        .strip_prefix("color:")
+        .or_else(|| tag.strip_prefix("colour:"))
+        .or_else(|| tag.strip_prefix("c:"))
+        .unwrap_or(tag);
 
-    hex.len() == 6 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    match color {
+        "black" | "dark_blue" | "dark_green" | "dark_aqua" | "dark_red" | "dark_purple"
+        | "gold" | "gray" | "dark_gray" | "blue" | "green" | "aqua" | "red"
+        | "light_purple" | "yellow" | "white" | "grey" | "dark_grey" => {
+            Some(match color {
+                "grey" => "gray",
+                "dark_grey" => "dark_gray",
+                _ => color,
+            }
+            .to_string())
+        }
+        _ => crate::component::normalize_color(color),
+    }
 }
 
 fn is_styling_tag(tag: &str) -> bool {
-    is_hex_color(tag)
+    color_from_tag(tag).is_some()
         || matches!(
             tag,
-            "black"
-            | "dark_blue"
-            | "dark_green"
-            | "dark_aqua"
-            | "dark_red"
-            | "dark_purple"
-            | "gold"
-            | "gray"
-            | "dark_gray"
-            | "blue"
-            | "green"
-            | "aqua"
-            | "red"
-            | "light_purple"
-            | "yellow"
-            | "white"
-            | "bold"
-            | "b"
-            | "italic"
-            | "i"
-            | "em"
-            | "underlined"
-            | "u"
-            | "strikethrough"
-            | "st"
-            | "obfuscated"
-            | "obf"
+            "bold"
+                | "b"
+                | "italic"
+                | "i"
+                | "em"
+                | "underlined"
+                | "u"
+                | "strikethrough"
+                | "st"
+                | "obfuscated"
+                | "obf"
         )
 }
 
@@ -104,15 +102,10 @@ pub fn parse_mini_message(input: &str) -> Result<Component, MiniMessageError> {
                 } else if is_styling_tag(&tag_name) {
                     let mut new_style = style_stack.last().cloned().unwrap_or_default();
                     new_style.tag = tag_name.clone();
-                    if is_hex_color(&tag_name) {
-                        new_style.color = Some(tag_name);
+                    if let Some(color) = color_from_tag(&tag_name) {
+                        new_style.color = Some(color);
                     } else {
                         match tag_name.as_str() {
-                            "black" | "dark_blue" | "dark_green" | "dark_aqua" | "dark_red"
-                            | "dark_purple" | "gold" | "gray" | "dark_gray" | "blue" | "green"
-                            | "aqua" | "red" | "light_purple" | "yellow" | "white" => {
-                                new_style.color = Some(tag_name);
-                            }
                             "bold" | "b" => new_style.bold = true,
                             "italic" | "i" | "em" => new_style.italic = true,
                             "underlined" | "u" => new_style.underlined = true,
@@ -231,6 +224,46 @@ mod tests {
         };
 
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_verbose_hex_color() {
+        let result = parse_mini_message("<color:#ff0088>Hello</color:#ff0088>").unwrap();
+
+        assert_eq!(
+            result.extra[0].color,
+            Some("#ff0088".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hsl_color() {
+        let result = parse_mini_message("<hsl(330, 100%, 50%)>Hello</hsl(330, 100%, 50%)>").unwrap();
+
+        assert_eq!(
+            result.extra[0].color,
+            Some("#ff0080".to_string())
+        );
+    }
+
+    #[test]
+    fn test_rgb_color() {
+        let result = parse_mini_message("<rgb(255, 0, 128)>Hello</rgb(255, 0, 128)>").unwrap();
+
+        assert_eq!(
+            result.extra[0].color,
+            Some("#ff0080".to_string())
+        );
+    }
+
+    #[test]
+    fn test_grey_alias() {
+        let result = parse_mini_message("<grey>Hello</grey>").unwrap();
+
+        assert_eq!(
+            result.extra[0].color,
+            Some("gray".to_string())
+        );
     }
 
     #[test]
