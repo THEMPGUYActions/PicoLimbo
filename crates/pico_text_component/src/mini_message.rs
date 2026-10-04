@@ -1,4 +1,4 @@
-use crate::prelude::{ClickEvent, Component, HoverEvent, ScoreComponent};
+use crate::prelude::{ClickEvent, Component, HoverEvent};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -324,20 +324,6 @@ fn handle_insert_tag(
             output.push(Component {
                 selector: Some(args[1].clone()),
                 separator,
-                color: style.color.clone(),
-                font: style.font.clone(),
-                insertion: style.insertion.clone(),
-                ..Component::default()
-            });
-            true
-        }
-        "score" if args.len() >= 3 => {
-            output.push(Component {
-                score: Some(ScoreComponent {
-                    name: args[1].clone(),
-                    objective: args[2].clone(),
-                    value: None,
-                }),
                 color: style.color.clone(),
                 font: style.font.clone(),
                 insertion: style.insertion.clone(),
