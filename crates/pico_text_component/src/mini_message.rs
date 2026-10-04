@@ -46,7 +46,42 @@ fn color_from_tag(tag: &str) -> Option<String> {
             }
             .to_string())
         }
-        _ => crate::component::normalize_color(color),
+        _ => {
+            if let Some(values) = color.strip_prefix("rgb:") {
+                let values: Vec<&str> = values.split(':').collect();
+                if values.len() == 3 {
+                    return crate::component::normalize_color(&format!(
+                        "rgb({}, {}, {})",
+                        values[0], values[1], values[2]
+                    ));
+                }
+            }
+
+            if let Some(values) = color.strip_prefix("hsl:") {
+                let values: Vec<&str> = values.split(':').collect();
+                if values.len() == 3 {
+                    return crate::component::normalize_color(&format!(
+                        "hsl({}, {}, {})",
+                        values[0], values[1], values[2]
+                    ));
+                }
+            }
+
+            if let Some(values) = color
+                .strip_prefix("hsv:")
+                .or_else(|| color.strip_prefix("hsb:"))
+            {
+                let values: Vec<&str> = values.split(':').collect();
+                if values.len() == 3 {
+                    return crate::component::normalize_color(&format!(
+                        "hsv({}, {}, {})",
+                        values[0], values[1], values[2]
+                    ));
+                }
+            }
+
+            crate::component::normalize_color(color)
+        }
     }
 }
 
@@ -238,22 +273,23 @@ mod tests {
 
     #[test]
     fn test_hsl_color() {
-        let result = parse_mini_message("<hsl(330, 100%, 50%)>Hello</hsl(330, 100%, 50%)>").unwrap();
+        let result = parse_mini_message("<hsl:330:100:50>Hello</hsl:330:100:50>").unwrap();
 
-        assert_eq!(
-            result.extra[0].color,
-            Some("#ff0080".to_string())
-        );
+        assert_eq!(result.extra[0].color, Some("#ff0080".to_string()));
     }
 
     #[test]
     fn test_rgb_color() {
-        let result = parse_mini_message("<rgb(255, 0, 128)>Hello</rgb(255, 0, 128)>").unwrap();
+        let result = parse_mini_message("<rgb:255:0:128>Hello</rgb:255:0:128>").unwrap();
 
-        assert_eq!(
-            result.extra[0].color,
-            Some("#ff0080".to_string())
-        );
+        assert_eq!(result.extra[0].color, Some("#ff0080".to_string()));
+    }
+
+    #[test]
+    fn test_hsv_color() {
+        let result = parse_mini_message("<hsv:330:100:100>Hello</hsv:330:100:100>").unwrap();
+
+        assert_eq!(result.extra[0].color, Some("#ff0080".to_string()));
     }
 
     #[test]
