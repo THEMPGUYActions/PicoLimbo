@@ -27,9 +27,10 @@ MiniMessage uses angle brackets `<>` to define formatting tags:
 PicoLimbo currently supports a **subset** of MiniMessage features:
 
 ### ✅ Supported
-- **Colors** - All standard Minecraft colors and hex colors such as `<#ff0088>`
+- **Colors** - All standard Minecraft colors, hex colors, and the MiniMessage verbose color form
 - **Formatting** - `<bold>`, `<italic>`, `<underlined>`, `<strikethrough>` and `<obfuscated>`
 - **New lines** - `<newline>`
+- **Additional color formats** - PicoLimbo also accepts RGB, HSL, and HSV/HSB functional color values and converts them to RGB
 
 ### ❌ Not Yet Supported
 - Gradients
@@ -42,6 +43,20 @@ PicoLimbo currently supports a **subset** of MiniMessage features:
 ## Hex Colors
 
 Hex colors use the MiniMessage format `<#RRGGBB>` and are supported by Minecraft 1.16 and newer. For older clients, PicoLimbo automatically falls back to the closest legacy Minecraft color.
+
+The verbose MiniMessage color syntax is also supported:
+`<color:#RRGGBB>`, `<colour:#RRGGBB>`, and `<c:#RRGGBB>`.
+
+PicoLimbo additionally accepts CSS-style RGB, HSL, and HSV/HSB color values. These are PicoLimbo extensions rather than standard MiniMessage tags. They are converted to an RGB hex color before the component is sent to the client. Alpha/transparency is not represented because the current text component model stores text colors as RGB.
+
+:::code-group
+```xml
+<rgb(255, 0, 128)>RGB</rgb(255, 0, 128)>
+<hsl(330, 100%, 50%)>HSL</hsl(330, 100%, 50%)>
+<hsv(330, 100%, 100%)>HSV</hsv(330, 100%, 100%)>
+<color:#ff0088>Verbose hex</color:#ff0088>
+```
+:::
 
 :::code-group
 ```toml [server.toml]
