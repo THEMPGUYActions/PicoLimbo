@@ -141,10 +141,8 @@ fn parse_hsl_color(color: &str) -> Option<(u8, u8, u8)> {
         .or_else(|| color.strip_prefix("HSL("))?
         .strip_suffix(')')?;
 
-    let values: Vec<&str> = content
-        .replace(',', " ")
-        .split_whitespace()
-        .collect();
+    let content = content.replace(',', " ");
+    let values: Vec<&str> = content.split_whitespace().collect();
 
     if values.len() != 3 {
         return None;
@@ -183,10 +181,8 @@ fn parse_hsv_color(color: &str) -> Option<(u8, u8, u8)> {
         .or_else(|| color.strip_prefix("HSB("))?
         .strip_suffix(')')?;
 
-    let values: Vec<&str> = content
-        .replace(',', " ")
-        .split_whitespace()
-        .collect();
+    let content = content.replace(',', " ");
+    let values: Vec<&str> = content.split_whitespace().collect();
 
     if values.len() != 3 {
         return None;
