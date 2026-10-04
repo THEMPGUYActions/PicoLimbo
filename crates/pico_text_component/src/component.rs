@@ -2,14 +2,6 @@ use minecraft_protocol::prelude::{BinaryWriter, BinaryWriterError, EncodePacket,
 use pico_nbt::Value;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
-pub struct ScoreComponent {
-    pub name: String,
-    pub objective: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub value: Option<String>,
-}
-
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ClickEvent {
     pub action: String,
@@ -32,8 +24,6 @@ pub struct Component {
     pub fallback: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub with: Vec<Component>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub score: Option<ScoreComponent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
