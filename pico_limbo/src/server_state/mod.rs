@@ -64,6 +64,7 @@ pub struct BossBar {
     pub division: BossBarDivision,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum TitleType {
     Title(Component),
     Subtitle(Component),
