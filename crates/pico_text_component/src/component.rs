@@ -389,7 +389,10 @@ fn normalize_click_event(value: &mut JsonValue) {
 }
 
 fn parse_uuid_int_array(value: &str) -> Option<[i32; 4]> {
-    let compact: String = value.chars().filter(|character| *character != '-').collect();
+    let compact: String = value
+        .chars()
+        .filter(|character| *character != '-')
+        .collect();
 
     if compact.len() != 32 || !compact.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return None;
