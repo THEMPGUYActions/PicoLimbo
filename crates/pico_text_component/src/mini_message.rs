@@ -162,11 +162,7 @@ fn decoration(tag: &str, value: Option<&str>) -> Option<(&'static str, bool)> {
     }
 }
 
-fn parse_hover(
-    action: &str,
-    args: &[String],
-    context: &MiniMessageContext,
-) -> Option<HoverEvent> {
+fn parse_hover(action: &str, args: &[String], context: &MiniMessageContext) -> Option<HoverEvent> {
     match action {
         "show_text" => {
             let value = args.join(":");
@@ -664,9 +660,7 @@ mod tests {
         );
         assert_eq!(
             hover.contents["id"],
-            serde_json::Value::String(
-                "00000000-0000-0000-0000-000000000000".to_string()
-            )
+            serde_json::Value::String("00000000-0000-0000-0000-000000000000".to_string())
         );
         assert_eq!(hover.contents["name"]["text"], serde_json::Value::String("Pig".to_string()));
     }
