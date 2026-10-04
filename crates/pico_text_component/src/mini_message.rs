@@ -39,7 +39,7 @@ fn is_hex_color(tag: &str) -> bool {
 fn is_styling_tag(tag: &str) -> bool {
     is_hex_color(tag)
         || matches!(
-        tag,
+            tag,
         "black"
             | "dark_blue"
             | "dark_green"
@@ -68,7 +68,6 @@ fn is_styling_tag(tag: &str) -> bool {
             | "obfuscated"
             | "obf"
         )
-}
 
 pub fn parse_mini_message(input: &str) -> Result<Component, MiniMessageError> {
     let wrapped_input = format!("<root>{input}</root>");
@@ -113,10 +112,10 @@ pub fn parse_mini_message(input: &str) -> Result<Component, MiniMessageError> {
                             | "aqua" | "red" | "light_purple" | "yellow" | "white" => {
                                 new_style.color = Some(tag_name);
                             }
-                        "bold" | "b" => new_style.bold = true,
-                        "italic" | "i" | "em" => new_style.italic = true,
-                        "underlined" | "u" => new_style.underlined = true,
-                        "strikethrough" | "st" => new_style.strikethrough = true,
+                            "bold" | "b" => new_style.bold = true,
+                            "italic" | "i" | "em" => new_style.italic = true,
+                            "underlined" | "u" => new_style.underlined = true,
+                            "strikethrough" | "st" => new_style.strikethrough = true,
                             "obfuscated" | "obf" => new_style.obfuscated = true,
                             _ => {}
                         }
