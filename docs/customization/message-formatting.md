@@ -27,17 +27,27 @@ MiniMessage uses angle brackets `<>` to define formatting tags:
 PicoLimbo currently supports a **subset** of MiniMessage features:
 
 ### ✅ Supported
-- **Colors** - All standard Minecraft colors
+- **Colors** - All standard Minecraft colors and hex colors such as `<#ff0088>`
 - **Formatting** - `<bold>`, `<italic>`, `<underlined>`, `<strikethrough>` and `<obfuscated>`
 - **New lines** - `<newline>`
 
 ### ❌ Not Yet Supported
-- Gradients and custom colors
+- Gradients
 - Hover events
 - Click events
 - Custom fonts
 - Keybinds
 - Translatable components
+
+## Hex Colors
+
+Hex colors use the MiniMessage format `<#RRGGBB>` and are supported by Minecraft 1.16 and newer. For older clients, PicoLimbo automatically falls back to the closest legacy Minecraft color.
+
+:::code-group
+```toml [server.toml]
+welcome_message = "<#ff0088>Welcome to <#8b5cf6>PicoLimbo</#8b5cf6>!</#ff0088>"
+```
+:::
 
 ## Examples
 
