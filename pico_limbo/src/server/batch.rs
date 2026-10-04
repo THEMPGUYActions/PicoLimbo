@@ -99,7 +99,6 @@ pub struct BatchStream {
     current: Current,
 }
 
-#[allow(clippy::large_enum_variant)]
 pub enum BatchItem {
     Packet(PacketRegistry),
     StateChange(Direction, State),
