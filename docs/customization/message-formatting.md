@@ -47,13 +47,13 @@ Hex colors use the MiniMessage format `<#RRGGBB>` and are supported by Minecraft
 The verbose MiniMessage color syntax is also supported:
 `<color:#RRGGBB>`, `<colour:#RRGGBB>`, and `<c:#RRGGBB>`.
 
-PicoLimbo additionally accepts CSS-style RGB, HSL, and HSV/HSB color values. These are PicoLimbo extensions rather than standard MiniMessage tags. They are converted to an RGB hex color before the component is sent to the client. Alpha/transparency is not represented because the current text component model stores text colors as RGB.
+PicoLimbo additionally accepts RGB, HSL, and HSV/HSB color values. These are PicoLimbo extensions rather than standard MiniMessage tags. In MiniMessage tags they use a colon-separated form so they remain compatible with PicoLimbo's XML-based parser: `<rgb:R:G:B>`, `<hsl:H:S:L>`, and `<hsv:H:S:V>`. HSL/HSV saturation, lightness, and value are percentages from 0 to 100. The values are converted to an RGB hex color before the component is sent to the client. Alpha/transparency is not represented because the current text component model stores text colors as RGB.
 
 :::code-group
 ```xml
-<rgb(255, 0, 128)>RGB</rgb(255, 0, 128)>
-<hsl(330, 100%, 50%)>HSL</hsl(330, 100%, 50%)>
-<hsv(330, 100%, 100%)>HSV</hsv(330, 100%, 100%)>
+<rgb:255:0:128>RGB</rgb:255:0:128>
+<hsl:330:100:50>HSL</hsl:330:100:50>
+<hsv:330:100:100>HSV</hsv:330:100:100>
 <color:#ff0088>Verbose hex</color:#ff0088>
 ```
 :::
