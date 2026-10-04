@@ -1,6 +1,7 @@
 use minecraft_protocol::prelude::{BinaryWriter, BinaryWriterError, EncodePacket, ProtocolVersion};
 use pico_nbt::Value;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ClickEvent {
@@ -314,6 +315,126 @@ fn legacy_color_code(color: &str) -> char {
     }
 }
 
+fn rename_event_keys(value: &mut JsonValue, modern: bool) {
+    match value {
+        JsonValue::Object(object) => {
+            if modern {
+                if let Some(event) = object.get_mut("click_event") {
+                    normalize_click_event(event);
+                }
+                if let Some(event) = object.get_mut("hover_event") {
+                    normalize_hover_event(event);
+                }
+            } else {
+                if let Some(event) = object.remove("click_event") {
+                    object.insert("clickEvent".to_string(), event);
+                }
+                if let Some(event) = object.remove("hover_event") {
+                    object.insert("hoverEvent".to_string(), event);
+                }
+            }
+
+            for child in object.values_mut() {
+                rename_event_keys(child, modern);
+            }
+        }
+        JsonValue::Array(array) => {
+            for child in array {
+                rename_event_keys(child, modern);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn normalize_click_event(value: &mut JsonValue) {
+    let JsonValue::Object(event) = value else {
+        return;
+    };
+
+    let Some(action) = event.get("action").and_then(JsonValue::as_str) else {
+        return;
+    };
+
+    let Some(value) = event.remove("value") else {
+        return;
+    };
+
+    let target = match action {
+        "open_url" => "url",
+        "run_command" | "suggest_command" => "command",
+        "change_page" => "page",
+        _ => {
+            event.insert("value".to_string(), value);
+            return;
+        }
+    };
+
+    if action == "change_page" {
+        let page = match value {
+            JsonValue::String(page) => page.parse::<u32>().ok().map(u64::from),
+            JsonValue::Number(page) => page.as_u64(),
+            _ => None,
+        };
+
+        if let Some(page) = page.filter(|page| *page > 0) {
+            event.insert("page".to_string(), JsonValue::from(page));
+        } else {
+            event.insert("value".to_string(), value);
+        }
+    } else {
+        event.insert(target.to_string(), value);
+    }
+}
+
+fn normalize_hover_event(value: &mut JsonValue) {
+    let JsonValue::Object(event) = value else {
+        return;
+    };
+
+    let Some(action) = event.get("action").and_then(JsonValue::as_str) else {
+        return;
+    };
+
+    let Some(contents) = event.remove("contents") else {
+        return;
+    };
+
+    match action {
+        "show_text" => {
+            event.insert("value".to_string(), contents);
+        }
+        "show_item" => match contents {
+            JsonValue::Object(fields) => {
+                event.extend(fields);
+            }
+            JsonValue::String(id) => {
+                event.insert("id".to_string(), JsonValue::String(id));
+            }
+            other => {
+                event.insert("contents".to_string(), other);
+            }
+        },
+        "show_entity" => match contents {
+            JsonValue::Object(mut fields) => {
+                if let Some(uuid) = fields.remove("id") {
+                    event.insert("uuid".to_string(), uuid);
+                }
+                if let Some(entity_type) = fields.remove("type") {
+                    event.insert("id".to_string(), entity_type);
+                }
+                event.extend(fields);
+            }
+            other => {
+                event.insert("contents".to_string(), other);
+            }
+        },
+        _ => {
+            event.insert("contents".to_string(), contents);
+        }
+    }
+}
+
 impl Component {
     pub fn new<S>(content: S) -> Self
     where
@@ -328,7 +449,11 @@ impl Component {
     pub fn to_json(&self) -> String {
         let mut component = self.clone();
         component.normalize_colors();
-        serde_json::to_string(&component).unwrap_or_default()
+
+        let mut value = serde_json::to_value(component).unwrap_or(JsonValue::Null);
+        rename_event_keys(&mut value, false);
+
+        serde_json::to_string(&value).unwrap_or_default()
     }
 
     fn normalize_colors(&mut self) {
@@ -383,9 +508,20 @@ impl Component {
     }
 
     pub fn to_nbt(&self) -> Value {
+        self.to_nbt_for_protocol(ProtocolVersion::V1_21_5)
+    }
+
+    fn to_nbt_for_protocol(&self, protocol_version: ProtocolVersion) -> Value {
         let mut component = self.clone();
         component.normalize_colors();
-        pico_nbt::to_value(&component).unwrap()
+
+        let mut value = serde_json::to_value(component).unwrap_or(JsonValue::Null);
+        rename_event_keys(
+            &mut value,
+            protocol_version.is_after_inclusive(ProtocolVersion::V1_21_5),
+        );
+
+        pico_nbt::json_to_nbt(value).unwrap()
     }
 
     pub fn to_legacy(&self) -> String {
@@ -454,7 +590,8 @@ impl EncodePacket for Component {
         protocol_version: ProtocolVersion,
     ) -> Result<(), BinaryWriterError> {
         if protocol_version.is_after_inclusive(ProtocolVersion::V1_20_3) {
-            self.to_nbt().encode(writer, protocol_version)?;
+            self.to_nbt_for_protocol(protocol_version)
+                .encode(writer, protocol_version)?;
         } else {
             self.for_protocol(protocol_version)
                 .to_json()
