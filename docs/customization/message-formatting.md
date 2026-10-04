@@ -256,16 +256,6 @@ Use `selector` or `sel` to create a selector component.
 
 The optional separator is parsed as a component.
 
-## Score Components
-
-Use `score` with a score holder name and objective.
-
-:::code-group
-```text
-<score:player:points>
-```
-:::
-
 ## NBT Components
 
 Use `nbt` or `data` for NBT components.
