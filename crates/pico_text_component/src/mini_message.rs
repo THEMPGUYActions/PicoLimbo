@@ -433,7 +433,6 @@ fn apply_tag(
     if normalized == "hsl" || normalized == "rgb" || normalized == "hsv" || normalized == "hsb" {
         if let Some(color) = crate::component::normalize_color(&format!("{}({})", normalized, args[1..].join(", "))) {
             let mut style = style_stack.last().cloned().unwrap_or_default();
-            let mut style = style_stack.last().cloned().unwrap_or_default();
             style.tag = normalized.clone();
             style.color = Some(color);
             style_stack.push(style);
@@ -497,7 +496,7 @@ fn apply_tag(
         &std::iter::once(normalized.clone())
             .chain(args.iter().cloned())
             .collect::<Vec<_>>(),
-        style_stack.last().unwrap_or(&Style::default()),
+        &style_stack.last().cloned().unwrap_or_default(),
         context,
         output,
     ) {
