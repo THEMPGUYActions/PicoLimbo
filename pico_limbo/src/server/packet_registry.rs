@@ -1,3 +1,5 @@
+#![allow(clippy::large_stack_frames)]
+
 use crate::server::batch::Batch;
 use crate::server::client_state::ClientState;
 use crate::server::packet_handler::{PacketHandler, PacketHandlerError};
@@ -56,8 +58,8 @@ use minecraft_packets::status::status_response_packet::StatusResponsePacket;
 use minecraft_protocol::prelude::*;
 use net::raw_packet::RawPacket;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(PacketReport)]
-#[allow(clippy::large_enum_variant, clippy::large_stack_frames)]
 pub enum PacketRegistry {
     // Handshake packets
     #[protocol_id(
