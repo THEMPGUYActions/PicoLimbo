@@ -31,7 +31,6 @@ struct Style {
     obfuscated: bool,
 }
 
-
 #[derive(Debug, Error)]
 pub enum MiniMessageError {
     #[error("Invalid MiniMessage tag: {tag}")]
