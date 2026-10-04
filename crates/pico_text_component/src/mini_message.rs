@@ -28,8 +28,17 @@ pub enum MiniMessageError {
     },
 }
 
+fn is_hex_color(tag: &str) -> bool {
+    let Some(hex) = tag.strip_prefix('#') else {
+        return false;
+    };
+
+    hex.len() == 6 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 fn is_styling_tag(tag: &str) -> bool {
-    matches!(
+    is_hex_color(tag)
+        || matches!(
         tag,
         "black"
             | "dark_blue"
@@ -58,7 +67,7 @@ fn is_styling_tag(tag: &str) -> bool {
             | "st"
             | "obfuscated"
             | "obf"
-    )
+        )
 }
 
 pub fn parse_mini_message(input: &str) -> Result<Component, MiniMessageError> {
@@ -95,18 +104,22 @@ pub fn parse_mini_message(input: &str) -> Result<Component, MiniMessageError> {
                 } else if is_styling_tag(&tag_name) {
                     let mut new_style = style_stack.last().cloned().unwrap_or_default();
                     new_style.tag = tag_name.clone();
-                    match tag_name.as_str() {
-                        "black" | "dark_blue" | "dark_green" | "dark_aqua" | "dark_red"
-                        | "dark_purple" | "gold" | "gray" | "dark_gray" | "blue" | "green"
-                        | "aqua" | "red" | "light_purple" | "yellow" | "white" => {
-                            new_style.color = Some(tag_name);
-                        }
+                    if is_hex_color(&tag_name) {
+                        new_style.color = Some(tag_name);
+                    } else {
+                        match tag_name.as_str() {
+                            "black" | "dark_blue" | "dark_green" | "dark_aqua" | "dark_red"
+                            | "dark_purple" | "gold" | "gray" | "dark_gray" | "blue" | "green"
+                            | "aqua" | "red" | "light_purple" | "yellow" | "white" => {
+                                new_style.color = Some(tag_name);
+                            }
                         "bold" | "b" => new_style.bold = true,
                         "italic" | "i" | "em" => new_style.italic = true,
                         "underlined" | "u" => new_style.underlined = true,
                         "strikethrough" | "st" => new_style.strikethrough = true,
-                        "obfuscated" | "obf" => new_style.obfuscated = true,
-                        _ => {}
+                            "obfuscated" | "obf" => new_style.obfuscated = true,
+                            _ => {}
+                        }
                     }
                     style_stack.push(new_style);
                 }
@@ -197,6 +210,39 @@ mod tests {
                     ..Component::default()
                 },
             ],
+            ..Component::default()
+        };
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_hex_color() {
+        let input = "<#ff0088>Hello</#ff0088>";
+        let result = parse_mini_message(input).unwrap();
+
+        let expected = Component {
+            extra: vec![Component {
+                text: "Hello".to_string(),
+                color: Some("#ff0088".to_string()),
+                ..Component::default()
+            }],
+            ..Component::default()
+        };
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_invalid_hex_color_is_not_a_styling_tag() {
+        let input = "<#ff08>Hello</#ff08>";
+        let result = parse_mini_message(input).unwrap();
+
+        let expected = Component {
+            extra: vec![Component {
+                text: "<#ff08>Hello</#ff08>".to_string(),
+                ..Component::default()
+            }],
             ..Component::default()
         };
 
