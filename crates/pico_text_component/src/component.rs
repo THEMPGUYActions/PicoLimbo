@@ -355,12 +355,13 @@ fn normalize_click_event(value: &mut JsonValue) {
     let Some(action) = event.get("action").and_then(JsonValue::as_str) else {
         return;
     };
+    let action = action.to_string();
 
     let Some(value) = event.remove("value") else {
         return;
     };
 
-    let target = match action {
+    let target = match action.as_str() {
         "open_url" => "url",
         "run_command" | "suggest_command" => "command",
         "change_page" => "page",
@@ -395,12 +396,13 @@ fn normalize_hover_event(value: &mut JsonValue) {
     let Some(action) = event.get("action").and_then(JsonValue::as_str) else {
         return;
     };
+    let action = action.to_string();
 
     let Some(contents) = event.remove("contents") else {
         return;
     };
 
-    match action {
+    match action.as_str() {
         "show_text" => {
             event.insert("value".to_string(), contents);
         }
@@ -640,7 +642,10 @@ mod tests {
             panic!("Expected legacy clickEvent");
         };
 
-        assert_eq!(event.get("value"), Some(&pico_nbt::Value::String("/spawn".to_string())));
+        assert_eq!(
+            event.get("value"),
+            Some(&pico_nbt::Value::String("/spawn".to_string()))
+        );
     }
 
     #[test]
@@ -662,7 +667,10 @@ mod tests {
             panic!("Expected modern click_event");
         };
 
-        assert_eq!(event.get("command"), Some(&pico_nbt::Value::String("/spawn".to_string())));
+        assert_eq!(
+            event.get("command"),
+            Some(&pico_nbt::Value::String("/spawn".to_string()))
+        );
         assert!(event.get("value").is_none());
     }
 
