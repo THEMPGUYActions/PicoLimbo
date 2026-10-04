@@ -730,12 +730,8 @@ mod tests {
         let Some(Value::Compound(event)) = root.get("hover_event") else {
             panic!("Expected modern hover_event");
         };
-        let Some(Value::IntArray(uuid)) = event.get("contents").and_then(|_| None) else {
-            let Some(Value::IntArray(uuid)) = event.get("uuid") else {
-                panic!("Expected modern UUID int array");
-            };
-            assert_eq!(uuid, &vec![0, 0, i32::MIN, 1]);
-            return;
+        let Some(Value::IntArray(uuid)) = event.get("uuid") else {
+            panic!("Expected modern UUID int array");
         };
         assert_eq!(uuid, &vec![0, 0, i32::MIN, 1]);
     }
