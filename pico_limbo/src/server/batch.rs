@@ -100,7 +100,7 @@ pub struct BatchStream {
 }
 
 pub enum BatchItem {
-    Packet(PacketRegistry),
+    Packet(Box<PacketRegistry>),
     StateChange(Direction, State),
     EnableCompression,
 }
@@ -117,20 +117,20 @@ impl Stream for BatchStream {
                     return match fut.as_mut().poll(cx) {
                         Poll::Ready(item) => {
                             this.current = Current::Idle;
-                            Poll::Ready(Some(BatchItem::Packet(item)))
+                            Poll::Ready(Some(BatchItem::Packet(Box::new(item))))
                         }
                         Poll::Pending => Poll::Pending,
                     };
                 }
                 Current::Iterator(iter) => {
                     if let Some(item) = iter.next() {
-                        return Poll::Ready(Some(BatchItem::Packet(item)));
+                        return Poll::Ready(Some(BatchItem::Packet(Box::new(item))));
                     }
                     this.current = Current::Idle;
                 }
                 Current::Idle => match this.producers.pop_front() {
                     Some(Producer::SyncClosure(f)) => {
-                        return Poll::Ready(Some(BatchItem::Packet(f())));
+                        return Poll::Ready(Some(BatchItem::Packet(Box::new(f()))));
                     }
                     Some(Producer::StateChange(direction, new_state)) => {
                         return Poll::Ready(Some(BatchItem::StateChange(direction, new_state)));
@@ -157,7 +157,7 @@ impl Stream for BatchStream {
 impl BatchItem {
     pub fn unwrap_packet(&self) -> &PacketRegistry {
         match self {
-            Self::Packet(packet) => packet,
+            Self::Packet(packet) => packet.as_ref(),
             Self::StateChange(direction, state) => panic!(
                 "tried to unwrap a packet, but got a state change instead direction={direction}, state={state}"
             ),

@@ -300,7 +300,7 @@ pub enum PacketRegistry {
     UpdateTime(UpdateTimePacket),
 
     #[protocol_id(state = "play", bound = "clientbound", name = "minecraft:tab_list")]
-    TabList(TabListPacket),
+    TabList(Box<TabListPacket>),
 
     #[protocol_id(
         state = "play",
