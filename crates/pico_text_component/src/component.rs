@@ -354,6 +354,8 @@ impl Component {
         }
 
         if let Some(color) = &self.color {
+            let normalized = normalize_color(color);
+            let color = normalized.as_deref().unwrap_or(color);
             let color = closest_legacy_color(color).unwrap_or(color);
             s.push('§');
             s.push(legacy_color_code(color));
