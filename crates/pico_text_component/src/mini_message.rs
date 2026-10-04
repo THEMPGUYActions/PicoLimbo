@@ -196,10 +196,7 @@ fn parse_hover(
             let entity_type = args.first()?.clone();
             let uuid = args.get(1)?.clone();
             let mut contents = serde_json::Map::new();
-            contents.insert(
-                "type".to_string(),
-                serde_json::Value::String(entity_type),
-            );
+            contents.insert("type".to_string(), serde_json::Value::String(entity_type));
             contents.insert("id".to_string(), serde_json::Value::String(uuid));
 
             if let Some(name) = args.get(2) {
@@ -643,8 +640,7 @@ mod tests {
 
     #[test]
     fn test_hover_item() {
-        let result =
-            parse_mini_message("<hover:show_item:diamond:2>Item</hover>").unwrap();
+        let result = parse_mini_message("<hover:show_item:diamond:2>Item</hover>").unwrap();
         let hover = result.extra[0].hover_event.as_ref().unwrap();
         assert_eq!(hover.action, "show_item");
         assert_eq!(
