@@ -663,7 +663,7 @@ mod tests {
             serde_json::Value::String("00000000-0000-0000-0000-000000000000".to_string())
         );
         assert_eq!(
-            hover.contents["name"]["text"],
+            hover.contents["name"]["extra"][0]["text"],
             serde_json::Value::String("Pig".to_string())
         );
     }
