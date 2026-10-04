@@ -3,9 +3,46 @@ use pico_nbt::Value;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
+pub struct ScoreComponent {
+    pub name: String,
+    pub objective: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
 pub struct Component {
     #[serde(default)]
     pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub with: Vec<Component>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<ScoreComponent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub separator: Option<Box<Component>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keybind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nbt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage: Option<String>,
+    #[serde(skip_serializing_if = "is_false", default)]
+    pub interpret: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub insertion: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     #[serde(skip_serializing_if = "is_false", default)]
