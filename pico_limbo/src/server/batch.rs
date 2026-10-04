@@ -124,13 +124,13 @@ impl Stream for BatchStream {
                 }
                 Current::Iterator(iter) => {
                     if let Some(item) = iter.next() {
-                        return Poll::Ready(Some(BatchItem::Packet(item)));
+                        return Poll::Ready(Some(BatchItem::Packet(Box::new(item))));
                     }
                     this.current = Current::Idle;
                 }
                 Current::Idle => match this.producers.pop_front() {
                     Some(Producer::SyncClosure(f)) => {
-                        return Poll::Ready(Some(BatchItem::Packet(f())));
+                        return Poll::Ready(Some(BatchItem::Packet(Box::new(f()))));
                     }
                     Some(Producer::StateChange(direction, new_state)) => {
                         return Poll::Ready(Some(BatchItem::StateChange(direction, new_state)));
