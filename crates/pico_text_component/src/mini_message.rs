@@ -145,9 +145,10 @@ fn color_from_tag(tag: &str) -> Option<String> {
     }
 }
 
-fn decoration(tag: &str) -> Option<(&str, bool)> {
-    let (tag, value) = tag.split_once(':').unwrap_or((tag, "true"));
-    let enabled = value != "false";
+fn decoration(tag: &str, value: Option<&str>) -> Option<(&str, bool)> {
+    let (tag, inline_value) = tag.split_once(':').unwrap_or((tag, ""));
+    let value = value.or_else(|| (!inline_value.is_empty()).then_some(inline_value));
+    let enabled = value != Some("false");
 
     match tag.strip_prefix('!').unwrap_or(tag) {
         "bold" | "b" => Some(("bold", enabled)),
@@ -405,7 +406,7 @@ fn apply_tag(
         return true;
     }
 
-    if let Some((name, enabled)) = decoration(&normalized) {
+    if let Some((name, enabled)) = decoration(&normalized, args.get(1).map(String::as_str)) {
         let mut style = style_stack.last().cloned().unwrap_or_default();
         style.tag = normalized.clone();
         match name {
@@ -635,6 +636,19 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn test_decoration_can_be_disabled_with_false() {
+        let result = parse_mini_message("<red><bold:false>Normal</bold:false></red>").unwrap();
+        assert!(!result.extra[0].bold);
+        assert_eq!(result.extra[0].color, Some("red".to_string()));
+    }
+
+    #[test]
+    fn test_decoration_can_be_negated() {
+        let result = parse_mini_message("<bold><!bold>Normal</!bold></bold>").unwrap();
+        assert!(!result.extra[0].bold);
+    }
+
     fn test_component_placeholder() {
         let mut context = MiniMessageContext::default();
         context.placeholders.insert(
