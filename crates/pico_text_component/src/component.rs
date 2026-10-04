@@ -11,6 +11,18 @@ pub struct ScoreComponent {
     pub value: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct ClickEvent {
+    pub action: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct HoverEvent {
+    pub action: String,
+    pub contents: serde_json::Value,
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
 pub struct Component {
     #[serde(default)]
@@ -43,6 +55,10 @@ pub struct Component {
     pub font: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub insertion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub click_event: Option<ClickEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hover_event: Option<HoverEvent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     #[serde(skip_serializing_if = "is_false", default)]
