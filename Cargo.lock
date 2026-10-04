@@ -1371,7 +1371,6 @@ version = "0.1.0"
 dependencies = [
  "minecraft_protocol",
  "pico_nbt",
- "quick-xml",
  "serde",
  "serde_json",
  "thiserror",
