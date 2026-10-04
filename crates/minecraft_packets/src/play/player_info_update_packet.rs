@@ -87,7 +87,6 @@ struct SigData {
 }
 
 #[derive(Clone)]
-#[allow(clippy::large_enum_variant)]
 enum PlayerActions {
     AddPlayer(AddPlayer),
     UpdateListed { listed: bool },
