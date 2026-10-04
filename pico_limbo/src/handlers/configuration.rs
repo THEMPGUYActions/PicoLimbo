@@ -227,7 +227,7 @@ pub fn send_play_packets(
 fn send_tab_list_packets(batch: &mut Batch, server_state: &ServerState) {
     if let Some(TabList { header, footer }) = server_state.tab_list() {
         let packet = TabListPacket::new(header, footer);
-        batch.queue(|| PacketRegistry::TabList(packet));
+        batch.queue(|| PacketRegistry::TabList(Box::new(packet)));
     }
 }
 
