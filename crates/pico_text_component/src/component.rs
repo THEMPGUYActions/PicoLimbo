@@ -371,7 +371,7 @@ fn normalize_click_event(value: &mut JsonValue) {
     };
 
     if action == "change_page" {
-        let page = match value {
+        let page = match &value {
             JsonValue::String(page) => page.parse::<u32>().ok().map(u64::from),
             JsonValue::Number(page) => page.as_u64(),
             _ => None,
@@ -604,6 +604,67 @@ impl EncodePacket for Component {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_legacy_json_uses_legacy_event_names() {
+        let component = Component {
+            text: "Click".to_string(),
+            click_event: Some(ClickEvent {
+                action: "run_command".to_string(),
+                value: "/spawn".to_string(),
+            }),
+            ..Component::default()
+        };
+
+        let json = component.to_json();
+        assert!(json.contains("\"clickEvent\""));
+        assert!(!json.contains("\"click_event\""));
+    }
+
+    #[test]
+    fn test_legacy_nbt_uses_legacy_event_payload() {
+        let component = Component {
+            text: "Click".to_string(),
+            click_event: Some(ClickEvent {
+                action: "run_command".to_string(),
+                value: "/spawn".to_string(),
+            }),
+            ..Component::default()
+        };
+
+        let value = component.to_nbt_for_protocol(ProtocolVersion::V1_20_3);
+        let pico_nbt::Value::Compound(root) = value else {
+            panic!("Expected component compound");
+        };
+        let Some(pico_nbt::Value::Compound(event)) = root.get("clickEvent") else {
+            panic!("Expected legacy clickEvent");
+        };
+
+        assert_eq!(event.get("value"), Some(&pico_nbt::Value::String("/spawn".to_string())));
+    }
+
+    #[test]
+    fn test_modern_nbt_uses_modern_event_payload() {
+        let component = Component {
+            text: "Click".to_string(),
+            click_event: Some(ClickEvent {
+                action: "run_command".to_string(),
+                value: "/spawn".to_string(),
+            }),
+            ..Component::default()
+        };
+
+        let value = component.to_nbt_for_protocol(ProtocolVersion::V1_21_5);
+        let pico_nbt::Value::Compound(root) = value else {
+            panic!("Expected component compound");
+        };
+        let Some(pico_nbt::Value::Compound(event)) = root.get("click_event") else {
+            panic!("Expected modern click_event");
+        };
+
+        assert_eq!(event.get("command"), Some(&pico_nbt::Value::String("/spawn".to_string())));
+        assert!(event.get("value").is_none());
+    }
 
     #[test]
     fn test_hex_color_is_preserved_for_1_16_and_newer() {
