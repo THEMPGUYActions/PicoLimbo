@@ -37,15 +37,15 @@ fn color_from_tag(tag: &str) -> Option<String> {
 
     match color {
         "black" | "dark_blue" | "dark_green" | "dark_aqua" | "dark_red" | "dark_purple"
-        | "gold" | "gray" | "dark_gray" | "blue" | "green" | "aqua" | "red"
-        | "light_purple" | "yellow" | "white" | "grey" | "dark_grey" => {
-            Some(match color {
+        | "gold" | "gray" | "dark_gray" | "blue" | "green" | "aqua" | "red" | "light_purple"
+        | "yellow" | "white" | "grey" | "dark_grey" => Some(
+            match color {
                 "grey" => "gray",
                 "dark_grey" => "dark_gray",
                 _ => color,
             }
-            .to_string())
-        }
+            .to_string(),
+        ),
         _ => {
             if let Some(values) = color.strip_prefix("rgb:") {
                 let values: Vec<&str> = values.split(':').collect();
@@ -265,10 +265,7 @@ mod tests {
     fn test_verbose_hex_color() {
         let result = parse_mini_message("<color:#ff0088>Hello</color:#ff0088>").unwrap();
 
-        assert_eq!(
-            result.extra[0].color,
-            Some("#ff0088".to_string())
-        );
+        assert_eq!(result.extra[0].color, Some("#ff0088".to_string()));
     }
 
     #[test]
@@ -296,10 +293,7 @@ mod tests {
     fn test_grey_alias() {
         let result = parse_mini_message("<grey>Hello</grey>").unwrap();
 
-        assert_eq!(
-            result.extra[0].color,
-            Some("gray".to_string())
-        );
+        assert_eq!(result.extra[0].color, Some("gray".to_string()));
     }
 
     #[test]
