@@ -405,7 +405,7 @@ fn apply_tag(
     context: &MiniMessageContext,
     output: &mut Vec<Component>,
 ) -> bool {
-    let mut normalized = tag.to_ascii_lowercase();
+    let normalized = tag.to_ascii_lowercase();
 
     if normalized == "reset" {
         style_stack.clear();
@@ -413,18 +413,28 @@ fn apply_tag(
         return true;
     }
 
-    if let Some(color) = color_from_tag(&normalized) {
+    let color_tag = if args.len() > 1 {
+        std::iter::once(normalized.as_str())
+            .chain(args[1..].iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(":")
+    } else {
+        normalized.clone()
+    };
+
+    if let Some(color) = color_from_tag(&color_tag) {
         let mut style = style_stack.last().cloned().unwrap_or_default();
-        style.tag = normalized;
+        style.tag = normalized.clone();
         style.color = Some(color);
         style_stack.push(style);
         return true;
     }
 
-    if normalized.starts_with("color:") || normalized.starts_with("colour:") || normalized.starts_with("c:") {
-        if let Some(color) = color_from_tag(&normalized) {
+    if normalized == "hsl" || normalized == "rgb" || normalized == "hsv" || normalized == "hsb" {
+        if let Some(color) = crate::component::normalize_color(&format!("{}({})", normalized, args[1..].join(", "))) {
             let mut style = style_stack.last().cloned().unwrap_or_default();
-            style.tag = normalized;
+            let mut style = style_stack.last().cloned().unwrap_or_default();
+            style.tag = normalized.clone();
             style.color = Some(color);
             style_stack.push(style);
             return true;
@@ -527,13 +537,13 @@ pub fn parse_mini_message_with_context(
         }
 
         if start > 0 && input.as_bytes()[start - 1] == b'\\' {
-            output.push(styled_text("<".to_string(), style_stack.last().unwrap()));
+            output.push(styled_text("<".to_string(), &style_stack.last().cloned().unwrap_or_default()));
             cursor = start + 1;
             continue;
         }
 
         let Some(end) = find_tag_end(input, start) else {
-            output.push(styled_text(input[start..].to_string(), style_stack.last().unwrap()));
+            output.push(styled_text(input[start..].to_string(), &style_stack.last().cloned().unwrap_or_default()));
             break;
         };
 
@@ -561,7 +571,7 @@ pub fn parse_mini_message_with_context(
             }
         } else if !apply_tag(&tag, &args, &mut style_stack, context, &mut output) {
             if let Some(component) = placeholder_component(&tag, context) {
-                append_component(&mut output, component, style_stack.last().unwrap());
+                append_component(&mut output, component, &style_stack.last().cloned().unwrap_or_default());
             } else {
                 output.push(styled_text(
                     input[start..=end].to_string(),
