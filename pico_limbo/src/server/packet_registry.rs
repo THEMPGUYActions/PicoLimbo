@@ -56,6 +56,7 @@ use minecraft_packets::status::status_response_packet::StatusResponsePacket;
 use minecraft_protocol::prelude::*;
 use net::raw_packet::RawPacket;
 
+#[allow(clippy::large_enum_variant, clippy::large_stack_frames)]
 #[derive(PacketReport)]
 pub enum PacketRegistry {
     // Handshake packets
