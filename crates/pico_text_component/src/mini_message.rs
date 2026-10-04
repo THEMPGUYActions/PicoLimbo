@@ -16,7 +16,7 @@ pub struct MiniMessageContext {
     pub unparsed_placeholders: HashMap<String, String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct Style {
     tag: String,
     color: Option<String>,
@@ -31,23 +31,6 @@ struct Style {
     obfuscated: bool,
 }
 
-impl Default for Style {
-    fn default() -> Self {
-        Self {
-            tag: String::new(),
-            color: None,
-            font: None,
-            insertion: None,
-            click_event: None,
-            hover_event: None,
-            bold: false,
-            italic: false,
-            underlined: false,
-            strikethrough: false,
-            obfuscated: false,
-        }
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum MiniMessageError {
@@ -426,16 +409,15 @@ fn apply_tag(
         return true;
     }
 
-    if normalized == "hsl" || normalized == "rgb" || normalized == "hsv" || normalized == "hsb" {
-        if let Some(color) =
+    if (normalized == "hsl" || normalized == "rgb" || normalized == "hsv" || normalized == "hsb")
+        && let Some(color) =
             crate::component::normalize_color(&format!("{}({})", normalized, args[1..].join(", ")))
-        {
-            let mut style = style_stack.last().cloned().unwrap_or_default();
-            style.tag = normalized.clone();
-            style.color = Some(color);
-            style_stack.push(style);
-            return true;
-        }
+    {
+        let mut style = style_stack.last().cloned().unwrap_or_default();
+        style.tag = normalized.clone();
+        style.color = Some(color);
+        style_stack.push(style);
+        return true;
     }
 
     if let Some((name, enabled)) = decoration(&normalized) {
@@ -657,11 +639,13 @@ mod tests {
 
     #[test]
     fn test_player_placeholder() {
-        let mut context = MiniMessageContext::default();
-        context.player = Some(PlayerContext {
-            name: Some("THEMPGUY".to_string()),
-            uuid: Some("00000000-0000-0000-0000-000000000000".to_string()),
-        });
+        let context = MiniMessageContext {
+            player: Some(PlayerContext {
+                name: Some("THEMPGUY".to_string()),
+                uuid: Some("00000000-0000-0000-0000-000000000000".to_string()),
+            }),
+            ..MiniMessageContext::default()
+        };
 
         let result = parse_mini_message_with_context("Hello <player>!", &context).unwrap();
         assert_eq!(result.extra[1].text, "THEMPGUY");
