@@ -2,7 +2,6 @@ use minecraft_protocol::prelude::{BinaryWriter, BinaryWriterError, EncodePacket,
 use pico_nbt::Value;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
 pub struct ScoreComponent {
     pub name: String,
