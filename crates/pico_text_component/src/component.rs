@@ -388,6 +388,63 @@ fn normalize_click_event(value: &mut JsonValue) {
     }
 }
 
+fn parse_uuid_int_array(value: &str) -> Option<[i32; 4]> {
+    let compact: String = value.chars().filter(|character| *character != '-').collect();
+
+    if compact.len() != 32 || !compact.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    Some([
+        i32::from_be_bytes([
+            u8::from_str_radix(&compact[0..2], 16).ok()?,
+            u8::from_str_radix(&compact[2..4], 16).ok()?,
+            u8::from_str_radix(&compact[4..6], 16).ok()?,
+            u8::from_str_radix(&compact[6..8], 16).ok()?,
+        ]),
+        i32::from_be_bytes([
+            u8::from_str_radix(&compact[8..10], 16).ok()?,
+            u8::from_str_radix(&compact[10..12], 16).ok()?,
+            u8::from_str_radix(&compact[12..14], 16).ok()?,
+            u8::from_str_radix(&compact[14..16], 16).ok()?,
+        ]),
+        i32::from_be_bytes([
+            u8::from_str_radix(&compact[16..18], 16).ok()?,
+            u8::from_str_radix(&compact[18..20], 16).ok()?,
+            u8::from_str_radix(&compact[20..22], 16).ok()?,
+            u8::from_str_radix(&compact[22..24], 16).ok()?,
+        ]),
+        i32::from_be_bytes([
+            u8::from_str_radix(&compact[24..26], 16).ok()?,
+            u8::from_str_radix(&compact[26..28], 16).ok()?,
+            u8::from_str_radix(&compact[28..30], 16).ok()?,
+            u8::from_str_radix(&compact[30..32], 16).ok()?,
+        ]),
+    ])
+}
+
+fn normalize_modern_nbt(value: &mut Value) {
+    match value {
+        Value::Compound(map) => {
+            if let Some(Value::String(uuid)) = map.get("uuid")
+                && let Some(uuid) = parse_uuid_int_array(uuid)
+            {
+                map.insert("uuid".to_string(), Value::IntArray(uuid.to_vec()));
+            }
+
+            for child in map.values_mut() {
+                normalize_modern_nbt(child);
+            }
+        }
+        Value::List(list) => {
+            for child in list {
+                normalize_modern_nbt(child);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn normalize_hover_event(value: &mut JsonValue) {
     let JsonValue::Object(event) = value else {
         return;
@@ -523,7 +580,11 @@ impl Component {
             protocol_version.is_after_inclusive(ProtocolVersion::V1_21_5),
         );
 
-        pico_nbt::json_to_nbt(value).unwrap()
+        let mut value = pico_nbt::json_to_nbt(value).unwrap();
+        if protocol_version.is_after_inclusive(ProtocolVersion::V1_21_5) {
+            normalize_modern_nbt(&mut value);
+        }
+        value
     }
 
     pub fn to_legacy(&self) -> String {
@@ -646,6 +707,37 @@ mod tests {
             event.get("value"),
             Some(&pico_nbt::Value::String("/spawn".to_string()))
         );
+    }
+
+    #[test]
+    fn test_uuid_is_encoded_as_an_int_array_in_modern_nbt() {
+        let component = Component {
+            text: "Entity".to_string(),
+            hover_event: Some(HoverEvent {
+                action: "show_entity".to_string(),
+                contents: serde_json::json!({
+                    "type": "minecraft:pig",
+                    "id": "00000000-0000-0000-8000-000000000001"
+                }),
+            }),
+            ..Component::default()
+        };
+
+        let value = component.to_nbt_for_protocol(ProtocolVersion::V1_21_5);
+        let Value::Compound(root) = value else {
+            panic!("Expected component compound");
+        };
+        let Some(Value::Compound(event)) = root.get("hover_event") else {
+            panic!("Expected modern hover_event");
+        };
+        let Some(Value::IntArray(uuid)) = event.get("contents").and_then(|_| None) else {
+            let Some(Value::IntArray(uuid)) = event.get("uuid") else {
+                panic!("Expected modern UUID int array");
+            };
+            assert_eq!(uuid, &vec![0, 0, i32::MIN, 1]);
+            return;
+        };
+        assert_eq!(uuid, &vec![0, 0, i32::MIN, 1]);
     }
 
     #[test]
