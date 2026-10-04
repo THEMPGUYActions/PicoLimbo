@@ -352,6 +352,14 @@ impl Component {
         for extra in &mut self.extra {
             extra.normalize_colors();
         }
+
+        for argument in &mut self.with {
+            argument.normalize_colors();
+        }
+
+        if let Some(separator) = &mut self.separator {
+            separator.normalize_colors();
+        }
     }
 
     fn for_protocol(&self, protocol_version: ProtocolVersion) -> Self {
@@ -370,6 +378,17 @@ impl Component {
             .iter()
             .map(|extra| extra.for_protocol(protocol_version))
             .collect();
+
+        component.with = self
+            .with
+            .iter()
+            .map(|argument| argument.for_protocol(protocol_version))
+            .collect();
+
+        component.separator = self
+            .separator
+            .as_deref()
+            .map(|separator| Box::new(separator.for_protocol(protocol_version)));
 
         component
     }
