@@ -162,19 +162,56 @@ fn decoration(tag: &str, value: Option<&str>) -> Option<(&'static str, bool)> {
     }
 }
 
-fn parse_hover(action: &str, value: &str, context: &MiniMessageContext) -> Option<HoverEvent> {
+fn parse_hover(
+    action: &str,
+    args: &[String],
+    context: &MiniMessageContext,
+) -> Option<HoverEvent> {
     match action {
         "show_text" => {
-            let component = parse_mini_message_with_context(value, context).ok()?;
+            let value = args.join(":");
+            let component = parse_mini_message_with_context(&value, context).ok()?;
             Some(HoverEvent {
                 action: action.to_string(),
                 contents: serde_json::to_value(component).ok()?,
             })
         }
-        "show_item" | "show_entity" => Some(HoverEvent {
-            action: action.to_string(),
-            contents: serde_json::Value::String(value.to_string()),
-        }),
+        "show_item" => {
+            let id = args.first()?.clone();
+            let mut contents = serde_json::Map::new();
+            contents.insert("id".to_string(), serde_json::Value::String(id));
+
+            if let Some(count) = args.get(1).and_then(|value| value.parse::<i32>().ok()) {
+                if count > 0 {
+                    contents.insert("count".to_string(), serde_json::Value::from(count));
+                }
+            }
+
+            Some(HoverEvent {
+                action: action.to_string(),
+                contents: serde_json::Value::Object(contents),
+            })
+        }
+        "show_entity" => {
+            let entity_type = args.first()?.clone();
+            let uuid = args.get(1)?.clone();
+            let mut contents = serde_json::Map::new();
+            contents.insert(
+                "type".to_string(),
+                serde_json::Value::String(entity_type),
+            );
+            contents.insert("id".to_string(), serde_json::Value::String(uuid));
+
+            if let Some(name) = args.get(2) {
+                let name = parse_mini_message_with_context(name, context).ok()?;
+                contents.insert("name".to_string(), serde_json::to_value(name).ok()?);
+            }
+
+            Some(HoverEvent {
+                action: action.to_string(),
+                contents: serde_json::Value::Object(contents),
+            })
+        }
         _ => None,
     }
 }
@@ -453,7 +490,7 @@ fn apply_tag(
     if normalized == "hover" && args.len() >= 3 {
         let mut style = style_stack.last().cloned().unwrap_or_default();
         style.tag = normalized.clone();
-        style.hover_event = parse_hover(&args[1], &args[2], context);
+        style.hover_event = parse_hover(&args[1], &args[2..], context);
         if style.hover_event.is_some() {
             style_stack.push(style);
             return true;
@@ -602,6 +639,40 @@ mod tests {
     fn test_hover_event() {
         let result = parse_mini_message("<hover:show_text:'<red>hello'>Hover</hover>").unwrap();
         assert!(result.extra[0].hover_event.is_some());
+    }
+
+    #[test]
+    fn test_hover_item() {
+        let result =
+            parse_mini_message("<hover:show_item:diamond:2>Item</hover>").unwrap();
+        let hover = result.extra[0].hover_event.as_ref().unwrap();
+        assert_eq!(hover.action, "show_item");
+        assert_eq!(
+            hover.contents["id"],
+            serde_json::Value::String("diamond".to_string())
+        );
+        assert_eq!(hover.contents["count"], serde_json::Value::from(2));
+    }
+
+    #[test]
+    fn test_hover_entity() {
+        let result = parse_mini_message(
+            "<hover:show_entity:pig:00000000-0000-0000-0000-000000000000:'Pig'>Entity</hover>",
+        )
+        .unwrap();
+        let hover = result.extra[0].hover_event.as_ref().unwrap();
+        assert_eq!(hover.action, "show_entity");
+        assert_eq!(
+            hover.contents["type"],
+            serde_json::Value::String("pig".to_string())
+        );
+        assert_eq!(
+            hover.contents["id"],
+            serde_json::Value::String(
+                "00000000-0000-0000-0000-000000000000".to_string()
+            )
+        );
+        assert_eq!(hover.contents["name"]["text"], serde_json::Value::String("Pig".to_string()));
     }
 
     #[test]
