@@ -290,10 +290,10 @@ impl Component {
     }
 
     fn normalize_colors(&mut self) {
-        if let Some(color) = &self.color {
-            if let Some(normalized) = normalize_color(color) {
-                self.color = Some(normalized);
-            }
+        if let Some(color) = &self.color
+            && let Some(normalized) = normalize_color(color)
+        {
+            self.color = Some(normalized);
         }
 
         for extra in &mut self.extra {
