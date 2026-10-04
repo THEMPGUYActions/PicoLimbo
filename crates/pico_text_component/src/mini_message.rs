@@ -145,10 +145,12 @@ fn color_from_tag(tag: &str) -> Option<String> {
     }
 }
 
-fn decoration(tag: &str, value: Option<&str>) -> Option<(&str, bool)> {
-    let (tag, inline_value) = tag.split_once(':').unwrap_or((tag, ""));
-    let value = value.or_else(|| (!inline_value.is_empty()).then_some(inline_value));
-    let enabled = value != Some("false");
+fn decoration(tag: &str, value: Option<&str>) -> Option<(&'static str, bool)> {
+    let enabled = if tag.starts_with('!') {
+        false
+    } else {
+        value != Some("false")
+    };
 
     match tag.strip_prefix('!').unwrap_or(tag) {
         "bold" | "b" => Some(("bold", enabled)),
@@ -424,7 +426,7 @@ fn apply_tag(
     if normalized == "font" && args.len() >= 2 {
         let mut style = style_stack.last().cloned().unwrap_or_default();
         style.tag = normalized.clone();
-        style.font = Some(args[1].clone());
+        style.font = Some(args[1..].join(":"));
         style_stack.push(style);
         return true;
     }
@@ -636,19 +638,25 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_decoration_can_be_disabled_with_false() {
-        let result = parse_mini_message("<red><bold:false>Normal</bold:false></red>").unwrap();
+        let result = parse_mini_message("<red><bold:false>Normal</bold></red>").unwrap();
         assert!(!result.extra[0].bold);
         assert_eq!(result.extra[0].color, Some("red".to_string()));
     }
 
     #[test]
     fn test_decoration_can_be_negated() {
-        let result = parse_mini_message("<bold><!bold>Normal</!bold></bold>").unwrap();
+        let result = parse_mini_message("<bold><!bold>Normal</bold></bold>").unwrap();
         assert!(!result.extra[0].bold);
     }
 
+    #[test]
+    fn test_namespaced_font() {
+        let result = parse_mini_message("<font:minecraft:default>Hello</font>").unwrap();
+        assert_eq!(result.extra[0].font, Some("minecraft:default".to_string()));
+    }
+
+    #[test]
     fn test_component_placeholder() {
         let mut context = MiniMessageContext::default();
         context.placeholders.insert(
