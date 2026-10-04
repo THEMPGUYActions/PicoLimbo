@@ -177,10 +177,10 @@ fn decoration(tag: &str) -> Option<(&str, bool)> {
     }
 }
 
-fn parse_hover(action: &str, value: &str) -> Option<HoverEvent> {
+fn parse_hover(action: &str, value: &str, context: &MiniMessageContext) -> Option<HoverEvent> {
     match action {
         "show_text" => {
-            let component = parse_mini_message(value).ok()?;
+            let component = parse_mini_message_with_context(value, context).ok()?;
             Some(HoverEvent {
                 action: action.to_string(),
                 contents: serde_json::to_value(component).ok()?,
@@ -245,10 +245,6 @@ fn parse_inline_component(value: &str, context: &MiniMessageContext) -> Option<C
 
 fn append_component(output: &mut Vec<Component>, component: Component, style: &Style) {
     if component == Component::default() {
-        return;
-    }
-
-    if component.text.is_empty() && component.extra.is_empty() {
         return;
     }
 
@@ -431,7 +427,9 @@ fn apply_tag(
     }
 
     if normalized == "hsl" || normalized == "rgb" || normalized == "hsv" || normalized == "hsb" {
-        if let Some(color) = crate::component::normalize_color(&format!("{}({})", normalized, args[1..].join(", "))) {
+        if let Some(color) =
+            crate::component::normalize_color(&format!("{}({})", normalized, args[1..].join(", ")))
+        {
             let mut style = style_stack.last().cloned().unwrap_or_default();
             style.tag = normalized.clone();
             style.color = Some(color);
@@ -442,7 +440,7 @@ fn apply_tag(
 
     if let Some((name, enabled)) = decoration(&normalized) {
         let mut style = style_stack.last().cloned().unwrap_or_default();
-        style.tag = normalized;
+        style.tag = normalized.clone();
         match name {
             "bold" => style.bold = enabled,
             "italic" => style.italic = enabled,
@@ -457,7 +455,7 @@ fn apply_tag(
 
     if normalized == "font" && args.len() >= 2 {
         let mut style = style_stack.last().cloned().unwrap_or_default();
-        style.tag = normalized;
+        style.tag = normalized.clone();
         style.font = Some(args[1].clone());
         style_stack.push(style);
         return true;
@@ -465,7 +463,7 @@ fn apply_tag(
 
     if normalized == "insert" && args.len() >= 2 {
         let mut style = style_stack.last().cloned().unwrap_or_default();
-        style.tag = normalized;
+        style.tag = normalized.clone();
         style.insertion = Some(args[1].clone());
         style_stack.push(style);
         return true;
@@ -473,7 +471,7 @@ fn apply_tag(
 
     if normalized == "click" && args.len() >= 3 {
         let mut style = style_stack.last().cloned().unwrap_or_default();
-        style.tag = normalized;
+        style.tag = normalized.clone();
         style.click_event = Some(ClickEvent {
             action: args[1].clone(),
             value: args[2].clone(),
@@ -484,8 +482,8 @@ fn apply_tag(
 
     if normalized == "hover" && args.len() >= 3 {
         let mut style = style_stack.last().cloned().unwrap_or_default();
-        style.tag = normalized;
-        style.hover_event = parse_hover(&args[1], &args[2]);
+        style.tag = normalized.clone();
+        style.hover_event = parse_hover(&args[1], &args[2], context);
         if style.hover_event.is_some() {
             style_stack.push(style);
             return true;
@@ -536,13 +534,19 @@ pub fn parse_mini_message_with_context(
         }
 
         if start > 0 && input.as_bytes()[start - 1] == b'\\' {
-            output.push(styled_text("<".to_string(), &style_stack.last().cloned().unwrap_or_default()));
+            output.push(styled_text(
+                "<".to_string(),
+                &style_stack.last().cloned().unwrap_or_default(),
+            ));
             cursor = start + 1;
             continue;
         }
 
         let Some(end) = find_tag_end(input, start) else {
-            output.push(styled_text(input[start..].to_string(), &style_stack.last().cloned().unwrap_or_default()));
+            output.push(styled_text(
+                input[start..].to_string(),
+                &style_stack.last().cloned().unwrap_or_default(),
+            ));
             break;
         };
 
@@ -570,7 +574,11 @@ pub fn parse_mini_message_with_context(
             }
         } else if !apply_tag(&tag, &args, &mut style_stack, context, &mut output) {
             if let Some(component) = placeholder_component(&tag, context) {
-                append_component(&mut output, component, &style_stack.last().cloned().unwrap_or_default());
+                append_component(
+                    &mut output,
+                    component,
+                    &style_stack.last().cloned().unwrap_or_default(),
+                );
             } else {
                 output.push(styled_text(
                     input[start..=end].to_string(),
@@ -637,8 +645,14 @@ mod tests {
     #[test]
     fn test_translate() {
         let result = parse_mini_message("<lang:chat.type.text:'<red>Hello'>").unwrap();
-        assert_eq!(result.extra[0].translate, Some("chat.type.text".to_string()));
-        assert_eq!(result.extra[0].with[0].extra[0].color, Some("red".to_string()));
+        assert_eq!(
+            result.extra[0].translate,
+            Some("chat.type.text".to_string())
+        );
+        assert_eq!(
+            result.extra[0].with[0].extra[0].color,
+            Some("red".to_string())
+        );
     }
 
     #[test]
