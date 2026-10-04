@@ -68,8 +68,8 @@ pub enum TitleType {
     Title(Component),
     Subtitle(Component),
     Both {
-        title: Component,
-        subtitle: Component,
+        title: Box<Component>,
+        subtitle: Box<Component>,
     },
 }
 
