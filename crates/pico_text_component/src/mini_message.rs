@@ -472,9 +472,7 @@ fn apply_tag(
     }
 
     if handle_insert_tag(
-        &std::iter::once(normalized.clone())
-            .chain(args.iter().cloned())
-            .collect::<Vec<_>>(),
+        args,
         &style_stack.last().cloned().unwrap_or_default(),
         context,
         output,
