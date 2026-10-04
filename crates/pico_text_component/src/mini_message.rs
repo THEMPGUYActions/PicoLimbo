@@ -177,10 +177,10 @@ fn parse_hover(action: &str, args: &[String], context: &MiniMessageContext) -> O
             let mut contents = serde_json::Map::new();
             contents.insert("id".to_string(), serde_json::Value::String(id));
 
-            if let Some(count) = args.get(1).and_then(|value| value.parse::<i32>().ok()) {
-                if count > 0 {
-                    contents.insert("count".to_string(), serde_json::Value::from(count));
-                }
+            if let Some(count) = args.get(1).and_then(|value| value.parse::<i32>().ok())
+                && count > 0
+            {
+                contents.insert("count".to_string(), serde_json::Value::from(count));
             }
 
             Some(HoverEvent {
