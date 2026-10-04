@@ -1,12 +1,29 @@
-use crate::prelude::Component;
-use quick_xml::Reader;
-use quick_xml::events::Event;
+use crate::prelude::{ClickEvent, Component, HoverEvent, ScoreComponent};
+use std::collections::HashMap;
 use thiserror::Error;
 
-#[derive(Default, Clone)]
+#[derive(Clone, Debug, Default)]
+pub struct PlayerContext {
+    pub name: Option<String>,
+    pub uuid: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MiniMessageContext {
+    pub player: Option<PlayerContext>,
+    pub placeholders: HashMap<String, Component>,
+    pub parsed_placeholders: HashMap<String, String>,
+    pub unparsed_placeholders: HashMap<String, String>,
+}
+
+#[derive(Clone)]
 struct Style {
     tag: String,
     color: Option<String>,
+    font: Option<String>,
+    insertion: Option<String>,
+    click_event: Option<ClickEvent>,
+    hover_event: Option<HoverEvent>,
     bold: bool,
     italic: bool,
     underlined: bool,
@@ -14,18 +31,114 @@ struct Style {
     obfuscated: bool,
 }
 
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            tag: String::new(),
+            color: None,
+            font: None,
+            insertion: None,
+            click_event: None,
+            hover_event: None,
+            bold: false,
+            italic: false,
+            underlined: false,
+            strikethrough: false,
+            obfuscated: false,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum MiniMessageError {
-    #[error("Failed to parse MiniMessage: {source}. Input: {input}")]
-    QuickXml {
-        source: quick_xml::Error,
-        input: String,
-    },
-    #[error("Encoding error while parsing MiniMessage: {source}. Input: {input}")]
-    Encoding {
-        source: quick_xml::encoding::EncodingError,
-        input: String,
-    },
+    #[error("Invalid MiniMessage tag: {tag}")]
+    InvalidTag { tag: String },
+}
+
+fn split_arguments(input: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut current = String::new();
+    let mut quote = None;
+    let mut escaped = false;
+
+    for ch in input.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && quote.is_some() {
+            escaped = true;
+            continue;
+        }
+
+        if let Some(q) = quote {
+            if ch == q {
+                quote = None;
+            } else {
+                current.push(ch);
+            }
+        } else if ch == '\'' || ch == '"' {
+            quote = Some(ch);
+        } else if ch == ':' {
+            values.push(current.trim().to_string());
+            current.clear();
+        } else {
+            current.push(ch);
+        }
+    }
+
+    values.push(current.trim().to_string());
+    values
+}
+
+fn find_tag_end(input: &str, start: usize) -> Option<usize> {
+    let mut quote = None;
+    let mut escaped = false;
+
+    for (offset, ch) in input[start..].char_indices() {
+        if offset == 0 {
+            continue;
+        }
+
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && quote.is_some() {
+            escaped = true;
+            continue;
+        }
+
+        if let Some(q) = quote {
+            if ch == q {
+                quote = None;
+            }
+        } else if ch == '\'' || ch == '"' {
+            quote = Some(ch);
+        } else if ch == '>' {
+            return Some(start + offset);
+        }
+    }
+
+    None
+}
+
+fn parse_tag(raw: &str) -> (bool, bool, Vec<String>) {
+    let mut value = raw.trim();
+    let closing = value.starts_with('/');
+    if closing {
+        value = &value[1..];
+    }
+
+    let self_closing = value.ends_with('/');
+    if self_closing {
+        value = value[..value.len() - 1].trim_end();
+    }
+
+    (closing, self_closing, split_arguments(value))
 }
 
 fn color_from_tag(tag: &str) -> Option<String> {
@@ -46,169 +159,428 @@ fn color_from_tag(tag: &str) -> Option<String> {
             }
             .to_string(),
         ),
-        _ => {
-            if let Some(values) = color.strip_prefix("rgb:") {
-                let values: Vec<&str> = values.split(':').collect();
-                if values.len() == 3 {
-                    return crate::component::normalize_color(&format!(
-                        "rgb({}, {}, {})",
-                        values[0], values[1], values[2]
-                    ));
-                }
-            }
-
-            if let Some(values) = color.strip_prefix("hsl:") {
-                let values: Vec<&str> = values.split(':').collect();
-                if values.len() == 3 {
-                    return crate::component::normalize_color(&format!(
-                        "hsl({}, {}, {})",
-                        values[0], values[1], values[2]
-                    ));
-                }
-            }
-
-            if let Some(values) = color
-                .strip_prefix("hsv:")
-                .or_else(|| color.strip_prefix("hsb:"))
-            {
-                let values: Vec<&str> = values.split(':').collect();
-                if values.len() == 3 {
-                    return crate::component::normalize_color(&format!(
-                        "hsv({}, {}, {})",
-                        values[0], values[1], values[2]
-                    ));
-                }
-            }
-
-            crate::component::normalize_color(color)
-        }
+        _ => crate::component::normalize_color(color),
     }
 }
 
-fn is_styling_tag(tag: &str) -> bool {
-    color_from_tag(tag).is_some()
-        || matches!(
-            tag,
-            "bold"
-                | "b"
-                | "italic"
-                | "i"
-                | "em"
-                | "underlined"
-                | "u"
-                | "strikethrough"
-                | "st"
-                | "obfuscated"
-                | "obf"
-        )
+fn decoration(tag: &str) -> Option<(&str, bool)> {
+    let (tag, value) = tag.split_once(':').unwrap_or((tag, "true"));
+    let enabled = value != "false";
+
+    match tag.strip_prefix('!').unwrap_or(tag) {
+        "bold" | "b" => Some(("bold", enabled)),
+        "italic" | "i" | "em" => Some(("italic", enabled)),
+        "underlined" | "u" => Some(("underlined", enabled)),
+        "strikethrough" | "st" => Some(("strikethrough", enabled)),
+        "obfuscated" | "obf" => Some(("obfuscated", enabled)),
+        _ => None,
+    }
+}
+
+fn parse_hover(action: &str, value: &str) -> Option<HoverEvent> {
+    match action {
+        "show_text" => {
+            let component = parse_mini_message(value).ok()?;
+            Some(HoverEvent {
+                action: action.to_string(),
+                contents: serde_json::to_value(component).ok()?,
+            })
+        }
+        "show_item" | "show_entity" => Some(HoverEvent {
+            action: action.to_string(),
+            contents: serde_json::Value::String(value.to_string()),
+        }),
+        _ => None,
+    }
+}
+
+fn styled_text(text: String, style: &Style) -> Component {
+    Component {
+        text,
+        color: style.color.clone(),
+        bold: style.bold,
+        italic: style.italic,
+        underlined: style.underlined,
+        strikethrough: style.strikethrough,
+        obfuscated: style.obfuscated,
+        font: style.font.clone(),
+        insertion: style.insertion.clone(),
+        click_event: style.click_event.clone(),
+        hover_event: style.hover_event.clone(),
+        ..Component::default()
+    }
+}
+
+fn placeholder_component(name: &str, context: &MiniMessageContext) -> Option<Component> {
+    if let Some(component) = context.placeholders.get(name) {
+        return Some(component.clone());
+    }
+
+    if let Some(value) = context.unparsed_placeholders.get(name) {
+        return Some(Component::new(value));
+    }
+
+    if let Some(value) = context.parsed_placeholders.get(name) {
+        return parse_mini_message_with_context(value, context).ok();
+    }
+
+    match name {
+        "player" | "name" => context
+            .player
+            .as_ref()
+            .and_then(|player| player.name.clone())
+            .map(Component::new),
+        "uuid" => context
+            .player
+            .as_ref()
+            .and_then(|player| player.uuid.clone())
+            .map(Component::new),
+        _ => None,
+    }
+}
+
+fn parse_inline_component(value: &str, context: &MiniMessageContext) -> Option<Component> {
+    parse_mini_message_with_context(value, context).ok()
+}
+
+fn append_component(output: &mut Vec<Component>, component: Component, style: &Style) {
+    if component == Component::default() {
+        return;
+    }
+
+    if component.text.is_empty() && component.extra.is_empty() {
+        return;
+    }
+
+    let mut component = component;
+    if component.color.is_none() {
+        component.color = style.color.clone();
+    }
+    if component.font.is_none() {
+        component.font = style.font.clone();
+    }
+    if component.insertion.is_none() {
+        component.insertion = style.insertion.clone();
+    }
+    if component.click_event.is_none() {
+        component.click_event = style.click_event.clone();
+    }
+    if component.hover_event.is_none() {
+        component.hover_event = style.hover_event.clone();
+    }
+
+    output.push(component);
+}
+
+fn handle_insert_tag(
+    args: &[String],
+    style: &Style,
+    context: &MiniMessageContext,
+    output: &mut Vec<Component>,
+) -> bool {
+    let Some(name) = args.first() else {
+        return false;
+    };
+
+    if let Some(component) = placeholder_component(name, context) {
+        append_component(output, component, style);
+        return true;
+    }
+
+    match name.as_str() {
+        "newline" | "br" => {
+            output.push(styled_text("\n".to_string(), style));
+            true
+        }
+        "key" if args.len() >= 2 => {
+            output.push(Component {
+                keybind: Some(args[1].clone()),
+                color: style.color.clone(),
+                font: style.font.clone(),
+                insertion: style.insertion.clone(),
+                click_event: style.click_event.clone(),
+                hover_event: style.hover_event.clone(),
+                ..Component::default()
+            });
+            true
+        }
+        "lang" | "tr" | "translate" if args.len() >= 2 => {
+            let with = args[2..]
+                .iter()
+                .filter_map(|value| parse_inline_component(value, context))
+                .collect();
+
+            output.push(Component {
+                translate: Some(args[1].clone()),
+                with,
+                color: style.color.clone(),
+                font: style.font.clone(),
+                insertion: style.insertion.clone(),
+                ..Component::default()
+            });
+            true
+        }
+        "lang_or" | "tr_or" | "translate_or" if args.len() >= 3 => {
+            let with = args[3..]
+                .iter()
+                .filter_map(|value| parse_inline_component(value, context))
+                .collect();
+
+            output.push(Component {
+                translate: Some(args[1].clone()),
+                fallback: Some(args[2].clone()),
+                with,
+                color: style.color.clone(),
+                font: style.font.clone(),
+                insertion: style.insertion.clone(),
+                ..Component::default()
+            });
+            true
+        }
+        "selector" | "sel" if args.len() >= 2 => {
+            let separator = args
+                .get(2)
+                .and_then(|value| parse_inline_component(value, context))
+                .map(Box::new);
+
+            output.push(Component {
+                selector: Some(args[1].clone()),
+                separator,
+                color: style.color.clone(),
+                font: style.font.clone(),
+                insertion: style.insertion.clone(),
+                ..Component::default()
+            });
+            true
+        }
+        "score" if args.len() >= 3 => {
+            output.push(Component {
+                score: Some(ScoreComponent {
+                    name: args[1].clone(),
+                    objective: args[2].clone(),
+                    value: None,
+                }),
+                color: style.color.clone(),
+                font: style.font.clone(),
+                insertion: style.insertion.clone(),
+                ..Component::default()
+            });
+            true
+        }
+        "nbt" | "data" if args.len() >= 4 => {
+            let source = args[1].as_str();
+            let id = args[2].clone();
+            let path = args[3].clone();
+            let mut component = Component {
+                nbt: Some(path),
+                color: style.color.clone(),
+                font: style.font.clone(),
+                insertion: style.insertion.clone(),
+                ..Component::default()
+            };
+
+            match source {
+                "block" => component.block = Some(id),
+                "entity" => component.entity = Some(id),
+                "storage" => component.storage = Some(id),
+                _ => return false,
+            }
+
+            component.interpret = args.iter().any(|value| value == "interpret");
+            if let Some(separator) = args.get(4).filter(|value| value.as_str() != "interpret") {
+                component.separator = parse_inline_component(separator, context).map(Box::new);
+            }
+
+            output.push(component);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn apply_tag(
+    tag: &str,
+    args: &[String],
+    style_stack: &mut Vec<Style>,
+    context: &MiniMessageContext,
+    output: &mut Vec<Component>,
+) -> bool {
+    let mut normalized = tag.to_ascii_lowercase();
+
+    if normalized == "reset" {
+        style_stack.clear();
+        style_stack.push(Style::default());
+        return true;
+    }
+
+    if let Some(color) = color_from_tag(&normalized) {
+        let mut style = style_stack.last().cloned().unwrap_or_default();
+        style.tag = normalized;
+        style.color = Some(color);
+        style_stack.push(style);
+        return true;
+    }
+
+    if normalized.starts_with("color:") || normalized.starts_with("colour:") || normalized.starts_with("c:") {
+        if let Some(color) = color_from_tag(&normalized) {
+            let mut style = style_stack.last().cloned().unwrap_or_default();
+            style.tag = normalized;
+            style.color = Some(color);
+            style_stack.push(style);
+            return true;
+        }
+    }
+
+    if let Some((name, enabled)) = decoration(&normalized) {
+        let mut style = style_stack.last().cloned().unwrap_or_default();
+        style.tag = normalized;
+        match name {
+            "bold" => style.bold = enabled,
+            "italic" => style.italic = enabled,
+            "underlined" => style.underlined = enabled,
+            "strikethrough" => style.strikethrough = enabled,
+            "obfuscated" => style.obfuscated = enabled,
+            _ => {}
+        }
+        style_stack.push(style);
+        return true;
+    }
+
+    if normalized == "font" && args.len() >= 2 {
+        let mut style = style_stack.last().cloned().unwrap_or_default();
+        style.tag = normalized;
+        style.font = Some(args[1].clone());
+        style_stack.push(style);
+        return true;
+    }
+
+    if normalized == "insert" && args.len() >= 2 {
+        let mut style = style_stack.last().cloned().unwrap_or_default();
+        style.tag = normalized;
+        style.insertion = Some(args[1].clone());
+        style_stack.push(style);
+        return true;
+    }
+
+    if normalized == "click" && args.len() >= 3 {
+        let mut style = style_stack.last().cloned().unwrap_or_default();
+        style.tag = normalized;
+        style.click_event = Some(ClickEvent {
+            action: args[1].clone(),
+            value: args[2].clone(),
+        });
+        style_stack.push(style);
+        return true;
+    }
+
+    if normalized == "hover" && args.len() >= 3 {
+        let mut style = style_stack.last().cloned().unwrap_or_default();
+        style.tag = normalized;
+        style.hover_event = parse_hover(&args[1], &args[2]);
+        if style.hover_event.is_some() {
+            style_stack.push(style);
+            return true;
+        }
+    }
+
+    if handle_insert_tag(
+        &std::iter::once(normalized.clone())
+            .chain(args.iter().cloned())
+            .collect::<Vec<_>>(),
+        style_stack.last().unwrap_or(&Style::default()),
+        context,
+        output,
+    ) {
+        return true;
+    }
+
+    false
 }
 
 pub fn parse_mini_message(input: &str) -> Result<Component, MiniMessageError> {
-    let wrapped_input = format!("<root>{input}</root>");
-    let mut reader = Reader::from_str(&wrapped_input);
-    reader.config_mut().check_end_names = false;
+    parse_mini_message_with_context(input, &MiniMessageContext::default())
+}
 
-    let mut flat_components = Vec::new();
-    let mut style_stack: Vec<Style> = vec![Style::default()];
+pub fn parse_mini_message_with_context(
+    input: &str,
+    context: &MiniMessageContext,
+) -> Result<Component, MiniMessageError> {
+    let mut output = Vec::new();
+    let mut style_stack = vec![Style::default()];
+    let mut cursor = 0;
 
-    loop {
-        match reader
-            .read_event()
-            .map_err(|e| MiniMessageError::QuickXml {
-                source: e,
-                input: input.to_string(),
-            })? {
-            Event::Start(e) => {
-                let tag_name = e.name().as_ref().to_string();
+    while cursor < input.len() {
+        let Some(relative_start) = input[cursor..].find('<') else {
+            let text = input[cursor..].replace("\\<", "<");
+            if !text.is_empty() {
+                output.push(styled_text(text, style_stack.last().unwrap()));
+            }
+            break;
+        };
 
-                if tag_name == "newline" {
-                    if let Some(current_style) = style_stack.last() {
-                        flat_components.push(Component {
-                            text: "\n".to_string(),
-                            color: current_style.color.clone(),
-                            bold: current_style.bold,
-                            italic: current_style.italic,
-                            underlined: current_style.underlined,
-                            strikethrough: current_style.strikethrough,
-                            obfuscated: current_style.obfuscated,
-                            extra: vec![],
-                        });
-                    }
-                } else if is_styling_tag(&tag_name) {
-                    let mut new_style = style_stack.last().cloned().unwrap_or_default();
-                    new_style.tag = tag_name.clone();
-                    if let Some(color) = color_from_tag(&tag_name) {
-                        new_style.color = Some(color);
-                    } else {
-                        match tag_name.as_str() {
-                            "bold" | "b" => new_style.bold = true,
-                            "italic" | "i" | "em" => new_style.italic = true,
-                            "underlined" | "u" => new_style.underlined = true,
-                            "strikethrough" | "st" => new_style.strikethrough = true,
-                            "obfuscated" | "obf" => new_style.obfuscated = true,
-                            _ => {}
-                        }
-                    }
-                    style_stack.push(new_style);
-                }
+        let start = cursor + relative_start;
+        if start > cursor {
+            let text = input[cursor..start].replace("\\<", "<");
+            if !text.is_empty() {
+                output.push(styled_text(text, style_stack.last().unwrap()));
             }
-            Event::End(e) => {
-                let tag_name = e.name().as_ref().to_string();
-                if is_styling_tag(&tag_name)
-                    && let Some(pos) = style_stack.iter().rposition(|s| s.tag == tag_name)
-                {
-                    style_stack.truncate(pos);
-                }
-            }
-            Event::Text(e) => {
-                let text = e.as_ref().to_string();
-                if text.is_empty() {
-                    continue;
-                }
-
-                if let Some(current_style) = style_stack.last() {
-                    flat_components.push(Component {
-                        text, // No need for .to_string() here
-                        color: current_style.color.clone(),
-                        bold: current_style.bold,
-                        italic: current_style.italic,
-                        underlined: current_style.underlined,
-                        strikethrough: current_style.strikethrough,
-                        obfuscated: current_style.obfuscated,
-                        extra: vec![],
-                    });
-                }
-            }
-            Event::Empty(e) => {
-                let tag_name = e.name().as_ref().to_string();
-                if tag_name == "newline"
-                    && let Some(current_style) = style_stack.last()
-                {
-                    flat_components.push(Component {
-                        text: "\n".to_string(),
-                        color: current_style.color.clone(),
-                        bold: current_style.bold,
-                        italic: current_style.italic,
-                        underlined: current_style.underlined,
-                        strikethrough: current_style.strikethrough,
-                        obfuscated: current_style.obfuscated,
-                        extra: vec![],
-                    });
-                }
-            }
-            Event::Eof => break,
-            _ => (),
         }
+
+        if start > 0 && input.as_bytes()[start - 1] == b'\\' {
+            output.push(styled_text("<".to_string(), style_stack.last().unwrap()));
+            cursor = start + 1;
+            continue;
+        }
+
+        let Some(end) = find_tag_end(input, start) else {
+            output.push(styled_text(input[start..].to_string(), style_stack.last().unwrap()));
+            break;
+        };
+
+        let raw = &input[start + 1..end];
+        let (closing, self_closing, args) = parse_tag(raw);
+
+        if args.is_empty() {
+            cursor = end + 1;
+            continue;
+        }
+
+        let tag = args[0].to_ascii_lowercase();
+
+        if closing {
+            if let Some(position) = style_stack.iter().rposition(|style| style.tag == tag) {
+                style_stack.truncate(position);
+                if style_stack.is_empty() {
+                    style_stack.push(Style::default());
+                }
+            } else if !raw.starts_with('/') {
+                output.push(styled_text(
+                    input[start..=end].to_string(),
+                    style_stack.last().unwrap(),
+                ));
+            }
+        } else if !apply_tag(&tag, &args, &mut style_stack, context, &mut output) {
+            if let Some(component) = placeholder_component(&tag, context) {
+                append_component(&mut output, component, style_stack.last().unwrap());
+            } else {
+                output.push(styled_text(
+                    input[start..=end].to_string(),
+                    style_stack.last().unwrap(),
+                ));
+            }
+        }
+
+        if self_closing && style_stack.len() > 1 {
+            style_stack.pop();
+        }
+
+        cursor = end + 1;
     }
 
-    if flat_components.is_empty() {
-        Ok(Component::default())
-    } else {
-        Ok(Component {
-            extra: flat_components,
-            ..Component::default()
-        })
-    }
+    Ok(Component {
+        extra: output,
+        ..Component::default()
+    })
 }
 
 #[cfg(test)]
@@ -216,240 +588,75 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_example_from_prompt_nested() {
-        let input = "<red><bold>Hello,</bold></red> <blue>world!</blue>";
-        let result = parse_mini_message(input).unwrap();
+    fn test_full_style_stack() {
+        let result = parse_mini_message(
+            "<red><bold><font:uniform><insert:hello>Hello</insert></font></bold></red>",
+        )
+        .unwrap();
 
-        let expected = Component {
-            extra: vec![
-                Component {
-                    text: "Hello,".to_string(),
-                    color: Some("red".to_string()),
-                    bold: true,
-                    ..Component::default()
-                },
-                Component {
-                    text: " ".to_string(),
-                    ..Component::default()
-                },
-                Component {
-                    text: "world!".to_string(),
-                    color: Some("blue".to_string()),
-                    ..Component::default()
-                },
-            ],
-            ..Component::default()
-        };
-
-        assert_eq!(result, expected);
+        let text = &result.extra[0];
+        assert_eq!(text.color, Some("red".to_string()));
+        assert!(text.bold);
+        assert_eq!(text.font, Some("uniform".to_string()));
+        assert_eq!(text.insertion, Some("hello".to_string()));
     }
 
     #[test]
-    fn test_hex_color() {
-        let input = "<#ff0088>Hello</#ff0088>";
-        let result = parse_mini_message(input).unwrap();
+    fn test_click_event() {
+        let result = parse_mini_message("<click:run_command:/spawn>Spawn</click>").unwrap();
+        assert_eq!(
+            result.extra[0].click_event,
+            Some(ClickEvent {
+                action: "run_command".to_string(),
+                value: "/spawn".to_string(),
+            })
+        );
+    }
 
-        let expected = Component {
-            extra: vec![Component {
-                text: "Hello".to_string(),
-                color: Some("#ff0088".to_string()),
+    #[test]
+    fn test_hover_event() {
+        let result = parse_mini_message("<hover:show_text:'<red>hello'>Hover</hover>").unwrap();
+        assert!(result.extra[0].hover_event.is_some());
+    }
+
+    #[test]
+    fn test_keybind() {
+        let result = parse_mini_message("Press <key:key.jump>!").unwrap();
+        assert_eq!(result.extra[1].keybind, Some("key.jump".to_string()));
+    }
+
+    #[test]
+    fn test_translate() {
+        let result = parse_mini_message("<lang:chat.type.text:'<red>Hello'>").unwrap();
+        assert_eq!(result.extra[0].translate, Some("chat.type.text".to_string()));
+        assert_eq!(result.extra[0].with[0].extra[0].color, Some("red".to_string()));
+    }
+
+    #[test]
+    fn test_player_placeholder() {
+        let mut context = MiniMessageContext::default();
+        context.player = Some(PlayerContext {
+            name: Some("THEMPGUY".to_string()),
+            uuid: Some("00000000-0000-0000-0000-000000000000".to_string()),
+        });
+
+        let result = parse_mini_message_with_context("Hello <player>!", &context).unwrap();
+        assert_eq!(result.extra[1].text, "THEMPGUY");
+    }
+
+    #[test]
+    fn test_component_placeholder() {
+        let mut context = MiniMessageContext::default();
+        context.placeholders.insert(
+            "server".to_string(),
+            Component {
+                text: "RealmsNetwork".to_string(),
+                color: Some("#ff00ff".to_string()),
                 ..Component::default()
-            }],
-            ..Component::default()
-        };
+            },
+        );
 
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_verbose_hex_color() {
-        let result = parse_mini_message("<color:#ff0088>Hello</color:#ff0088>").unwrap();
-
-        assert_eq!(result.extra[0].color, Some("#ff0088".to_string()));
-    }
-
-    #[test]
-    fn test_hsl_color() {
-        let result = parse_mini_message("<hsl:330:100:50>Hello</hsl:330:100:50>").unwrap();
-
-        assert_eq!(result.extra[0].color, Some("#ff0080".to_string()));
-    }
-
-    #[test]
-    fn test_rgb_color() {
-        let result = parse_mini_message("<rgb:255:0:128>Hello</rgb:255:0:128>").unwrap();
-
-        assert_eq!(result.extra[0].color, Some("#ff0080".to_string()));
-    }
-
-    #[test]
-    fn test_hsv_color() {
-        let result = parse_mini_message("<hsv:330:100:100>Hello</hsv:330:100:100>").unwrap();
-
-        assert_eq!(result.extra[0].color, Some("#ff0080".to_string()));
-    }
-
-    #[test]
-    fn test_grey_alias() {
-        let result = parse_mini_message("<grey>Hello</grey>").unwrap();
-
-        assert_eq!(result.extra[0].color, Some("gray".to_string()));
-    }
-
-    #[test]
-    fn test_invalid_hex_color_is_not_a_styling_tag() {
-        let input = "<#ff08>Hello</#ff08>";
-        let result = parse_mini_message(input).unwrap();
-
-        let expected = Component {
-            extra: vec![Component {
-                text: "<#ff08>Hello</#ff08>".to_string(),
-                ..Component::default()
-            }],
-            ..Component::default()
-        };
-
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_json_serialization_nested() {
-        let input = "<red><bold>Hello,</bold></red> <blue>world!</blue>";
-        let component = parse_mini_message(input).unwrap();
-        let json_output = serde_json::to_string(&component).unwrap();
-
-        // Note: The order of fields in JSON is not guaranteed, but serde usually serializes in order.
-        // A more robust test would parse the JSON back and compare, but for this case, string comparison is fine.
-        let expected_json = r#"{"text":"","extra":[{"text":"Hello,","color":"red","bold":true},{"text":" "},{"text":"world!","color":"blue"}]}"#;
-
-        assert_eq!(json_output, expected_json);
-    }
-
-    #[test]
-    fn test_plain_text_nested() {
-        let input = "Just some plain text.";
-        let result = parse_mini_message(input).unwrap();
-        let expected = Component {
-            extra: vec![Component {
-                text: "Just some plain text.".to_string(),
-                ..Component::default()
-            }],
-            ..Component::default()
-        };
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_nested_tags_nested() {
-        let input = "<red>This is red, <bold>and this is bold red.</bold> Back to red.</red>";
-        let result = parse_mini_message(input).unwrap();
-        let expected = Component {
-            text: String::new(),
-            extra: vec![
-                Component {
-                    text: "This is red, ".to_string(),
-                    color: Some("red".to_string()),
-                    ..Component::default()
-                },
-                Component {
-                    text: "and this is bold red.".to_string(),
-                    color: Some("red".to_string()),
-                    bold: true,
-                    ..Component::default()
-                },
-                Component {
-                    text: " Back to red.".to_string(),
-                    color: Some("red".to_string()),
-                    ..Component::default()
-                },
-            ],
-            ..Component::default()
-        };
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_empty_input_nested() {
-        let input = "";
-        let result = parse_mini_message(input).unwrap();
-        let expected = Component::default();
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_non_closing_tags() {
-        let input = "<red><bold>Non-closing tags<italic> are supported</bold></red>";
-        let result = parse_mini_message(input).unwrap();
-        let expected = Component {
-            text: String::new(),
-            extra: vec![
-                Component {
-                    text: "Non-closing tags".to_string(),
-                    color: Some("red".to_string()),
-                    bold: true,
-                    ..Component::default()
-                },
-                Component {
-                    text: " are supported".to_string(),
-                    color: Some("red".to_string()),
-                    bold: true,
-                    italic: true,
-                    ..Component::default()
-                },
-            ],
-            ..Component::default()
-        };
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_newline_tag() {
-        let input = "First line.<newline>Second line.";
-        let result = parse_mini_message(input).unwrap();
-        let expected = Component {
-            extra: vec![
-                Component {
-                    text: "First line.".to_string(),
-                    ..Component::default()
-                },
-                Component {
-                    text: "\n".to_string(),
-                    ..Component::default()
-                },
-                Component {
-                    text: "Second line.".to_string(),
-                    ..Component::default()
-                },
-            ],
-            ..Component::default()
-        };
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_newline_self_closing_tag() {
-        let input = "<green>Hello<newline/>world!</green>";
-        let result = parse_mini_message(input).unwrap();
-        let expected = Component {
-            extra: vec![
-                Component {
-                    text: "Hello".to_string(),
-                    color: Some("green".to_string()),
-                    ..Component::default()
-                },
-                Component {
-                    text: "\n".to_string(),
-                    color: Some("green".to_string()),
-                    ..Component::default()
-                },
-                Component {
-                    text: "world!".to_string(),
-                    color: Some("green".to_string()),
-                    ..Component::default()
-                },
-            ],
-            ..Component::default()
-        };
-        assert_eq!(result, expected);
+        let result = parse_mini_message_with_context("Hello <server>!", &context).unwrap();
+        assert_eq!(result.extra[1].text, "RealmsNetwork");
     }
 }
