@@ -220,15 +220,14 @@ fn parse_color(color: &str) -> Option<(u8, u8, u8)> {
 
 pub(crate) fn normalize_color(color: &str) -> Option<String> {
     match color {
-        "grey" | "dark_grey" => Some(
-            if color == "grey" {
-                "gray".to_string()
-            } else {
-                "dark_gray".to_string()
-            },
-        ),
-        _ => parse_color(color)
-            .map(|(red, green, blue)| format!("#{red:02x}{green:02x}{blue:02x}")),
+        "grey" | "dark_grey" => Some(if color == "grey" {
+            "gray".to_string()
+        } else {
+            "dark_gray".to_string()
+        }),
+        _ => {
+            parse_color(color).map(|(red, green, blue)| format!("#{red:02x}{green:02x}{blue:02x}"))
+        }
     }
 }
 
@@ -307,11 +306,10 @@ impl Component {
         component.normalize_colors();
 
         if protocol_version.is_before_inclusive(ProtocolVersion::V1_15_2) {
-            component.color = component.color.as_deref().map(|color| {
-                closest_legacy_color(color)
-                    .unwrap_or(color)
-                    .to_string()
-            });
+            component.color = component
+                .color
+                .as_deref()
+                .map(|color| closest_legacy_color(color).unwrap_or(color).to_string());
         }
 
         component.extra = self
